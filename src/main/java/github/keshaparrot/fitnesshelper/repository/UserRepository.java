@@ -1,4 +1,12 @@
 package github.keshaparrot.fitnesshelper.repository;
 
-public interface UserRepository {
+import github.keshaparrot.fitnesshelper.domain.entity.UserProfile;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+public interface UserRepository extends JpaRepository<UserProfile, Long> {
+    boolean existsByEmail(String email);
+    Optional<UserProfile> findByEmail(String email);
+    Optional<UserProfile> getUserProfileById(Long id);
 }

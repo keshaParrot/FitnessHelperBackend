@@ -21,6 +21,7 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserMapper userMapper;
 
     public UserDTO getById(Long id){
          UserProfile user = userRepository.getUserProfileById(id)
@@ -68,13 +69,11 @@ public class UserServiceImpl implements UserService {
         if (request.getWeightKg() != null){
             user.setWeightKg(request.getWeightKg());
         }
-        if (!user.equals(userRepository.findByEmail(request.getEmail()).get())){
-            return entityToDto(userRepository.save(user));
-        }
-        return null;
+
+        return entityToDto(userRepository.save(user));
     }
 
     private UserDTO entityToDto(UserProfile userProfile){
-        return UserMapper.INSTANCE.toDto(userProfile);
+        return userMapper.toDto(userProfile);
     }
 }

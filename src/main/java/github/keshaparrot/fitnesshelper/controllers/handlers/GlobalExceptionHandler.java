@@ -1,6 +1,5 @@
-package github.keshaparrot.fitnesshelper.controllers;
+package github.keshaparrot.fitnesshelper.controllers.handlers;
 
-import github.keshaparrot.fitnesshelper.utils.exceptions.EntityNotFoundException;
 import org.springframework.data.crossstore.ChangeSetPersister;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;

@@ -10,6 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,23 +19,16 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
     private final UserService userService;
 
-    @GetMapping("/get-by/{id}")
-    public ResponseEntity<UserDTO> getById(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(userService.getById(id));
-    }
-
-    @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestBody CreateUserRequest request) { //TODO check is here OK @Valid
-        boolean result = userService.register(request);
-        return ResponseEntity.status(result
-                ? HttpStatus.OK
-                : HttpStatus.BAD_REQUEST
-        ).body("User was created successfully");
+    @GetMapping("/get-by-id")
+    public ResponseEntity<UserDTO> getById(@AuthenticationPrincipal UserProfile user) {
+        return ResponseEntity.ok(userService.getById(user.getId()));
     }
 
     @PutMapping("/update")
-    public ResponseEntity<UserDTO> update(@Valid @RequestBody UpdateUserDataRequest request) { //TODO check is here OK @Valid
-        UserDTO updatedUser = userService.update(request);
+    public ResponseEntity<UserDTO> update(
+            @AuthenticationPrincipal UserProfile user,
+            @Valid @RequestBody UpdateUserDataRequest request) {
+        UserDTO updatedUser = userService.update(user.getEmail(),request);
         return ResponseEntity.status(
                 HttpStatus.OK
         ).body(updatedUser);

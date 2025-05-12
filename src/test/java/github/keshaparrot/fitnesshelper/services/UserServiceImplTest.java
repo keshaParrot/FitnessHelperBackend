@@ -1,159 +1,181 @@
 package github.keshaparrot.fitnesshelper.services;
 
-import github.keshaparrot.fitnesshelper.domain.dto.CreateUserRequest;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import github.keshaparrot.fitnesshelper.domain.dto.UpdateUserDataRequest;
 import github.keshaparrot.fitnesshelper.domain.dto.UserDTO;
 import github.keshaparrot.fitnesshelper.domain.entity.UserProfile;
 import github.keshaparrot.fitnesshelper.domain.mappers.UserMapper;
 import github.keshaparrot.fitnesshelper.repository.UserRepository;
-import github.keshaparrot.fitnesshelper.utils.exceptions.DuplicateEmailException;
 import github.keshaparrot.fitnesshelper.utils.exceptions.UserNotFoundException;
-import org.hibernate.mapping.Any;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
 import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
-    @Mock
-    private PasswordEncoder passwordEncoder;
+
     @Mock
     private UserMapper userMapper;
 
+    @InjectMocks
     private UserServiceImpl userService;
+
+    private UserProfile sampleUser;
+    private UserDTO sampleDto;
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
-        lenient().when(userMapper.toDto(any(UserProfile.class))).thenAnswer(invocation -> {
-            UserProfile user = invocation.getArgument(0);
-            return UserDTO.builder()
-                    .id(user.getId())
-                    .email(user.getEmail())
-                    .firstName(user.getFirstName())
-                    .lastName(user.getLastName())
-                    .password(user.getPassword())
-                    .dateOfBirth(user.getDateOfBirth())
-                    .gender(user.getGender())
-                    .build();
-        });
-        userService = new UserServiceImpl(userRepository, passwordEncoder, userMapper);
+        sampleUser = new UserProfile();
+        sampleUser.setId(1L);
+        sampleUser.setEmail("john.doe@example.com");
+        sampleUser.setFirstName("John");
+        sampleUser.setLastName("Doe");
+        sampleUser.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        sampleUser.setGender("MALE");
+        sampleUser.setHeightCm(180);
+        sampleUser.setWeightKg(75.0);
+
+        sampleDto = new UserDTO();
+        sampleDto.setId(1L);
+        sampleDto.setEmail("john.doe@example.com");
+        sampleDto.setFirstName("John");
+        sampleDto.setLastName("Doe");
+        sampleDto.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        sampleDto.setGender("MALE");
+        sampleDto.setHeightCm(180);
+        sampleDto.setWeightKg(75.0);
     }
 
     @Test
-    void register_shouldSaveUser_whenEmailIsUnique() {
-        CreateUserRequest request = CreateUserRequest.builder()
-                .email("test@email.com")
-                .password("password")
-                .firstName("John")
-                .lastName("Doe")
+    @DisplayName("getById returns DTO when user exists")
+    void getByIdSuccess() {
+        when(userRepository.getUserProfileById(1L)).thenReturn(Optional.of(sampleUser));
+        when(userMapper.toDto(sampleUser)).thenReturn(sampleDto);
+
+        UserDTO result = userService.getById(1L);
+
+        assertNotNull(result);
+        assertEquals(sampleDto, result);
+        verify(userRepository).getUserProfileById(1L);
+        verify(userMapper).toDto(sampleUser);
+    }
+
+    @Test
+    @DisplayName("getById throws UserNotFoundException when user not found")
+    void getByIdNotFound() {
+        when(userRepository.getUserProfileById(2L)).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class, () -> userService.getById(2L));
+        verify(userRepository).getUserProfileById(2L);
+        verifyNoMoreInteractions(userMapper);
+    }
+
+    @Test
+    @DisplayName("getEntityById returns entity when user exists")
+    void getEntityByIdSuccess() {
+        when(userRepository.getUserProfileById(1L)).thenReturn(Optional.of(sampleUser));
+
+        UserProfile result = userService.getEntityById(1L);
+
+        assertNotNull(result);
+        assertEquals(sampleUser, result);
+        verify(userRepository).getUserProfileById(1L);
+    }
+
+    @Test
+    @DisplayName("getEntityById throws UserNotFoundException when user not found")
+    void getEntityByIdNotFound() {
+        when(userRepository.getUserProfileById(3L)).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class, () -> userService.getEntityById(3L));
+        verify(userRepository).getUserProfileById(3L);
+    }
+
+    @Test
+    @DisplayName("update updates only non-null fields and returns DTO")
+    void updatePartialFields() {
+        UpdateUserDataRequest request = UpdateUserDataRequest.builder()
+                .email("john.doe@example.com")
+                .firstName("Jonathan")
+                .lastName("Smith")
+                .dateOfBirth(LocalDate.of(1985, 5, 20))
+                .gender("OTHER")
+                .heightCm(175)
+                .weightKg(70.0)
                 .build();
 
-        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
-        when(passwordEncoder.encode(request.getPassword())).thenReturn("hashed");
+        when(userRepository.findByEmail("john.doe@example.com")).thenReturn(Optional.of(sampleUser));
+        when(userRepository.save(any(UserProfile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userMapper.toDto(any(UserProfile.class))).thenReturn(sampleDto);
 
-        boolean result = userService.register(request);
+        UserDTO result = userService.update("john.doe@example.com", request);
 
-        assertTrue(result);
         ArgumentCaptor<UserProfile> captor = ArgumentCaptor.forClass(UserProfile.class);
         verify(userRepository).save(captor.capture());
-        assertEquals("test@email.com", captor.getValue().getEmail());
-        assertEquals("hashed", captor.getValue().getPassword());
+        UserProfile saved = captor.getValue();
+
+        assertEquals("Jonathan", saved.getFirstName());
+        assertEquals("Smith", saved.getLastName());
+        assertEquals(LocalDate.of(1985, 5, 20), saved.getDateOfBirth());
+        assertEquals("OTHER", saved.getGender());
+        assertEquals(175, saved.getHeightCm());
+        assertEquals(70, saved.getWeightKg());
+
+        assertEquals(sampleDto, result);
+        verify(userMapper).toDto(saved);
     }
 
     @Test
-    void register_shouldThrowException_whenEmailExists() {
-        CreateUserRequest request = CreateUserRequest.builder()
-                .email("duplicate@email.com")
-                .password("pass")
-                .firstName("A")
-                .lastName("B")
-                .build();
-        when(userRepository.existsByEmail(request.getEmail())).thenReturn(true);
-
-
-        assertThrows(DuplicateEmailException.class, () -> userService.register(request));
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void getById_shouldReturnUser_whenExists() {
-        UserProfile user = UserProfile.builder()
-                .id(1L)
-                .email("test@a.com")
-                .firstName("John")
-                .lastName("Doe")
-                .build();
-        when(userRepository.getUserProfileById(1L)).thenReturn(Optional.of(user));
-
-        UserDTO dto = userService.getById(1L);
-
-        assertNotNull(dto);
-        assertEquals("test@a.com", dto.getEmail());
-    }
-
-    @Test
-    void getById_shouldThrow_whenNotFound() {
-        when(userRepository.getUserProfileById(99L)).thenReturn(Optional.empty());
-
-        assertThrows(UserNotFoundException.class, () -> userService.getById(99L));
-    }
-
-    @Test
-    void update_shouldUpdateUserData_whenFound() {
+    @DisplayName("update throws UserNotFoundException when email not found")
+    void updateNotFound() {
         UpdateUserDataRequest request = UpdateUserDataRequest.builder()
-                .email("john@doe.com")
-                .firstName("Johnny")
-                .lastName(null)
-                .dateOfBirth(
-                        LocalDate.of(1990, 1, 1)
-                )
-                .gender(null)
-                .heightCm(180)
-                .weightKg(80.5)
+                .email("nonexistent@example.com")
                 .build();
 
+        when(userRepository.findByEmail("nonexistent@example.com")).thenReturn(Optional.empty());
 
-        UserProfile user = UserProfile.builder()
-                .email("john@doe.com")
-                .firstName("John")
-                .build();
-
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(user));
-        when(userRepository.save(any())).thenReturn(user);
-
-        UserDTO updated = userService.update(request);
-
-        assertNotNull(updated);
-        assertEquals("Johnny", updated.getFirstName());
-        verify(userRepository).save(user);
+        assertThrows(UserNotFoundException.class,
+                () -> userService.update("nonexistent@example.com", request)
+        );
+        verify(userRepository).findByEmail("nonexistent@example.com");
+        verifyNoMoreInteractions(userRepository, userMapper);
     }
 
     @Test
-    void update_shouldThrow_whenUserNotFound() {
+    @DisplayName("update with null fields does not change entity")
+    void updateWithNulls() {
         UpdateUserDataRequest request = UpdateUserDataRequest.builder()
-                .email("not@found.com")
-                .firstName("X")
-                .lastName("Y")
-                .dateOfBirth(null)
-                .gender(null)
-                .heightCm(null)
-                .weightKg(null)
+                .email("john.doe@example.com")
                 .build();
-        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.empty());
 
-        assertThrows(UserNotFoundException.class, () -> userService.update(request));
+        when(userRepository.findByEmail("john.doe@example.com")).thenReturn(Optional.of(sampleUser));
+        when(userRepository.save(any(UserProfile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userMapper.toDto(sampleUser)).thenReturn(sampleDto);
+
+        UserDTO result = userService.update("john.doe@example.com", request);
+
+        assertEquals("John", sampleUser.getFirstName());
+        assertEquals("Doe", sampleUser.getLastName());
+        assertEquals(LocalDate.of(1990, 1, 1), sampleUser.getDateOfBirth());
+        assertEquals("MALE", sampleUser.getGender());
+        assertEquals(180, sampleUser.getHeightCm());
+        assertEquals(75, sampleUser.getWeightKg());
+
+        assertEquals(sampleDto, result);
+        verify(userRepository).save(sampleUser);
+        verify(userMapper).toDto(sampleUser);
     }
 }
